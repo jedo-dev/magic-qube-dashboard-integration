@@ -1,0 +1,19 @@
+[Unit]
+Description=Magic Qube Mail Integration Service
+After=network.target mongodb.service
+Wants=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/opt/magic-qube-dashboard-integration
+Environment=NODE_ENV=production
+EnvironmentFile=/opt/magic-qube-dashboard-integration/.env
+ExecStart=/usr/bin/node /opt/magic-qube-dashboard-integration/dist/index.js
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
