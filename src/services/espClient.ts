@@ -124,7 +124,7 @@ export class EspClient {
       commands.push({ type: "rect", x: 12, y, w: 22, h: 14, color: ICON_COLOR, fill: false });
       commands.push({ type: "line", x0: 12, y0: y, x1: 23, y1: y + 10, color: ICON_COLOR });
       commands.push({ type: "line", x0: 34, y0: y, x1: 23, y1: y + 10, color: ICON_COLOR });
-      commands.push({ type: "text", x: 44, y: y - 2, text: item.label, size: 1, color: LABEL_COLOR });
+      commands.push({ type: "text", x: 44, y: y - 2, text: item.label, size: 2, color: LABEL_COLOR });
       commands.push({
         type: "text",
         x: this.getCountX(countText, COUNT_TEXT_SIZE),

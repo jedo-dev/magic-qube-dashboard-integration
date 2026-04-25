@@ -22,7 +22,7 @@ const integrationSchema = new Schema<IntegrationMongo>(
   {
     type: {
       type: String,
-      enum: ["yandex_imap", "mailru_imap"],
+      enum: ["yandex_imap", "mailru_imap", "yandex_tracker_imap"],
       required: true
     },
     enabled: {
