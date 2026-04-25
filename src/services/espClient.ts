@@ -35,6 +35,11 @@ const BG_COLOR = "#000000";
 const MAIL_TITLE_COLOR = "#ffffff";
 const LABEL_COLOR = "#aaaaaa";
 const ICON_COLOR = "#00ffff";
+const SCREEN_WIDTH = 240;
+const COUNT_RIGHT_PADDING = 4;
+const FONT_CHAR_WIDTH = 6;
+const COUNT_TEXT_SIZE = 3;
+const MIN_COUNT_X = 120;
 
 export class EspClient {
   private readonly client: AxiosInstance;
@@ -115,16 +120,17 @@ export class EspClient {
     const rows = state.integrations.slice(0, MAX_VISIBLE_INTEGRATIONS);
     rows.forEach((item, index) => {
       const y = 50 + index * 42;
+      const countText = String(item.unreadCount);
       commands.push({ type: "rect", x: 12, y, w: 22, h: 14, color: ICON_COLOR, fill: false });
       commands.push({ type: "line", x0: 12, y0: y, x1: 23, y1: y + 10, color: ICON_COLOR });
       commands.push({ type: "line", x0: 34, y0: y, x1: 23, y1: y + 10, color: ICON_COLOR });
       commands.push({ type: "text", x: 44, y: y - 2, text: item.label, size: 1, color: LABEL_COLOR });
       commands.push({
         type: "text",
-        x: 170,
+        x: this.getCountX(countText, COUNT_TEXT_SIZE),
         y: y - 6,
-        text: String(item.unreadCount),
-        size: 3,
+        text: countText,
+        size: COUNT_TEXT_SIZE,
         color: item.color
       });
     });
@@ -145,17 +151,24 @@ export class EspClient {
       }
 
       const y = 50 + index * 42;
+      const countText = String(current.unreadCount);
       const payload: DrawTextPayload = {
-        x: 170,
+        x: this.getCountX(countText, COUNT_TEXT_SIZE),
         y: y - 6,
-        text: String(current.unreadCount),
-        size: 3,
+        text: countText,
+        size: COUNT_TEXT_SIZE,
         color: current.color,
         bg: BG_COLOR,
         clear: true
       };
       await this.postWithRetry(env.esp.drawTextEndpoint, payload);
     }
+  }
+
+  private getCountX(text: string, size: number): number {
+    const width = text.length * FONT_CHAR_WIDTH * size;
+    const rightAligned = SCREEN_WIDTH - COUNT_RIGHT_PADDING - width;
+    return Math.max(MIN_COUNT_X, rightAligned);
   }
 
   private async postWithRetry(url: string, payload: unknown): Promise<void> {
