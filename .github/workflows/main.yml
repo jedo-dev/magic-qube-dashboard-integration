@@ -1,0 +1,44 @@
+name: Deploy Magic Qube Mail
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Build and Deploy
+    runs-on: [self-hosted]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create .env from secrets
+        shell: bash
+        run: |
+          cat > .env <<EOF
+          HOST=0.0.0.0
+          PORT=${{ secrets.PORT }}
+          MONGO_URI=${{ secrets.MONGO_URI }}
+          LOG_LEVEL=${{ secrets.LOG_LEVEL }}
+          API_KEY=${{ secrets.API_KEY }}
+          ESP_BASE_URL=${{ secrets.ESP_BASE_URL }}
+          ESP_TIMEOUT_MS=${{ secrets.ESP_TIMEOUT_MS }}
+          ESP_RETRY_COUNT=${{ secrets.ESP_RETRY_COUNT }}
+          ESP_RETRY_DELAY_MS=${{ secrets.ESP_RETRY_DELAY_MS }}
+          ESP_FULL_RENDER_INTERVAL_SEC=${{ secrets.ESP_FULL_RENDER_INTERVAL_SEC }}
+          STOP_GIF_ON_RENDER=${{ secrets.STOP_GIF_ON_RENDER }}
+          DEFAULT_POLL_INTERVAL_SEC=${{ secrets.DEFAULT_POLL_INTERVAL_SEC }}
+          SCHEDULER_TICK_SEC=${{ secrets.SCHEDULER_TICK_SEC }}
+          MAX_CONCURRENT_JOBS=${{ secrets.MAX_CONCURRENT_JOBS }}
+          IMAP_CONNECT_TIMEOUT_MS=${{ secrets.IMAP_CONNECT_TIMEOUT_MS }}
+          CREDENTIALS_ENCRYPTION_KEY=${{ secrets.CREDENTIALS_ENCRYPTION_KEY }}
+          EOF
+
+      - name: Build image
+        run: docker compose build --pull
+
+      - name: Deploy
+        run: docker compose up -d --build --remove-orphans

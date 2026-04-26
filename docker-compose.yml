@@ -1,0 +1,12 @@
+services:
+  magic-qube-mail:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: magic-qube-mail:latest
+    container_name: magic-qube-mail
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "${PORT:-3000}:${PORT:-3000}"
