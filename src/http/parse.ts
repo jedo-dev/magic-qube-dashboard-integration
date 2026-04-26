@@ -1,6 +1,11 @@
 import { IntegrationType, ImapCredentials } from "../types/integration";
 
-const allowedTypes: IntegrationType[] = ["yandex_imap", "mailru_imap", "yandex_tracker_imap"];
+const allowedTypes: IntegrationType[] = [
+  "yandex_imap",
+  "mailru_imap",
+  "yandex_tracker_imap",
+  "mail_gs_tracker_imap"
+];
 
 export class BadRequestError extends Error {}
 
@@ -57,6 +62,7 @@ export const parseCredentials = (value: unknown): ImapCredentials => {
     login: asString(obj.login, "credentials.login"),
     appPassword: asString(obj.appPassword, "credentials.appPassword"),
     assigneeName: asOptionalString(obj.assigneeName, "credentials.assigneeName"),
+    completionSender: asOptionalString(obj.completionSender, "credentials.completionSender"),
     host: asOptionalString(obj.host, "credentials.host"),
     port: asOptionalNumber(obj.port, "credentials.port"),
     secure: asOptionalBoolean(obj.secure, "credentials.secure")

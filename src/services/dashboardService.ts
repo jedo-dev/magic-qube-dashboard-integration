@@ -5,7 +5,7 @@ export class DashboardService {
   private latestState: DashboardState | null = null;
 
   async buildState(): Promise<DashboardState> {
-    const integrations = await Integration.find().sort({ sortOrder: 1, createdAt: 1 });
+    const integrations = await Integration.find({ enabled: true }).sort({ sortOrder: 1, createdAt: 1 });
     const state = this.mapToState(integrations);
     this.latestState = state;
     return state;

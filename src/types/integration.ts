@@ -1,9 +1,14 @@
-export type IntegrationType = "yandex_imap" | "mailru_imap" | "yandex_tracker_imap";
+export type IntegrationType =
+  | "yandex_imap"
+  | "mailru_imap"
+  | "yandex_tracker_imap"
+  | "mail_gs_tracker_imap";
 
 export interface ImapCredentials {
   login: string;
   appPassword: string;
   assigneeName?: string;
+  completionSender?: string;
   host?: string;
   port?: number;
   secure?: boolean;

@@ -40,6 +40,8 @@ const COUNT_RIGHT_PADDING = 4;
 const FONT_CHAR_WIDTH = 6;
 const COUNT_TEXT_SIZE = 3;
 const MIN_COUNT_X = 120;
+const TRACKER_ICON_BG = "#4f525e";
+const TRACKER_ICON_FG = "#ffffff";
 
 export class EspClient {
   private readonly client: AxiosInstance;
@@ -121,9 +123,11 @@ export class EspClient {
     rows.forEach((item, index) => {
       const y = 50 + index * 42;
       const countText = String(item.unreadCount);
-      commands.push({ type: "rect", x: 12, y, w: 22, h: 14, color: ICON_COLOR, fill: false });
-      commands.push({ type: "line", x0: 12, y0: y, x1: 23, y1: y + 10, color: ICON_COLOR });
-      commands.push({ type: "line", x0: 34, y0: y, x1: 23, y1: y + 10, color: ICON_COLOR });
+      if (item.type === "yandex_tracker_imap" || item.type === "mail_gs_tracker_imap") {
+        this.drawTrackerIcon(commands, 12, y);
+      } else {
+        this.drawMailIcon(commands, 12, y);
+      }
       commands.push({ type: "text", x: 44, y: y - 2, text: item.label, size: 2, color: LABEL_COLOR });
       commands.push({
         type: "text",
@@ -169,6 +173,21 @@ export class EspClient {
     const width = text.length * FONT_CHAR_WIDTH * size;
     const rightAligned = SCREEN_WIDTH - COUNT_RIGHT_PADDING - width;
     return Math.max(MIN_COUNT_X, rightAligned);
+  }
+
+  private drawMailIcon(commands: DrawBatchPayload["commands"], x: number, y: number): void {
+    commands.push({ type: "rect", x, y, w: 22, h: 14, color: ICON_COLOR, fill: false });
+    commands.push({ type: "line", x0: x, y0: y, x1: x + 11, y1: y + 10, color: ICON_COLOR });
+    commands.push({ type: "line", x0: x + 22, y0: y, x1: x + 11, y1: y + 10, color: ICON_COLOR });
+  }
+
+  private drawTrackerIcon(commands: DrawBatchPayload["commands"], x: number, y: number): void {
+    // Simple Tracker-like glyph: gray tile with white "T" made from blocks.
+    commands.push({ type: "rect", x, y, w: 22, h: 14, color: TRACKER_ICON_BG, fill: true });
+    commands.push({ type: "rect", x: x + 4, y: y + 2, w: 14, h: 3, color: TRACKER_ICON_FG, fill: true });
+    commands.push({ type: "rect", x: x + 9, y: y + 5, w: 4, h: 7, color: TRACKER_ICON_FG, fill: true });
+    commands.push({ type: "rect", x: x + 4, y: y + 6, w: 4, h: 4, color: TRACKER_ICON_FG, fill: true });
+    commands.push({ type: "rect", x: x + 14, y: y + 6, w: 4, h: 4, color: TRACKER_ICON_FG, fill: true });
   }
 
   private async postWithRetry(url: string, payload: unknown): Promise<void> {
