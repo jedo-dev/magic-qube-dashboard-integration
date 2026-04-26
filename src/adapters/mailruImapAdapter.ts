@@ -10,6 +10,7 @@ export class MailRuImapAdapter implements MailIntegrationAdapter {
       host: credentials.host ?? "imap.mail.ru",
       port: credentials.port ?? 993,
       secure: credentials.secure ?? true,
+      logger: false,
       auth: {
         user: credentials.login,
         pass: credentials.appPassword

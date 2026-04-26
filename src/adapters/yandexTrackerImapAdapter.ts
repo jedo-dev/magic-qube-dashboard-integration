@@ -13,8 +13,17 @@ type TrackerEventType = "assigned_to_me" | "removed_from_me" | "ignored";
 const TASK_KEY_REGEX = /\b[A-Z][A-Z0-9]+-\d+\b/;
 const ASSIGNEE_FIELD_WORD = "исполнитель";
 
+const decodeEscapedUnicode = (value: string): string =>
+  value.replace(/\\u([0-9a-fA-F]{4})/g, (_m, hex: string) => String.fromCharCode(parseInt(hex, 16)));
+
+const normalizeAssigneeInput = (value: string): string => {
+  const decoded = decodeEscapedUnicode(value);
+  // Some clients accidentally store names like "\А\л\е..." - strip those slashes.
+  return decoded.replace(/\\/g, "");
+};
+
 const normalize = (value: string): string =>
-  value
+  normalizeAssigneeInput(value)
     .replace(/\s+/g, " ")
     .replaceAll("ё", "е")
     .trim()
@@ -141,6 +150,7 @@ export class YandexTrackerImapAdapter implements MailIntegrationAdapter {
       host: credentials.host ?? "imap.yandex.ru",
       port: credentials.port ?? 993,
       secure: credentials.secure ?? true,
+      logger: false,
       auth: {
         user: credentials.login,
         pass: credentials.appPassword
