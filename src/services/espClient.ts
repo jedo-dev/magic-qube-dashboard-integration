@@ -211,12 +211,16 @@ export class EspClient {
   }
 
   private drawGsIcon(commands: DrawBatchPayload["commands"], x: number, y: number): void {
-    const cx = x + 11;
-    const topY = y;
-    const midY = y + 7;
-    const bottomY = y + 14;
-    const leftX = x;
-    const rightX = x + 22;
+    // Draw in a square area to avoid horizontal squashing on 22x14 row slot.
+    const size = 14;
+    const offsetX = x + 4; // center square in the 22px slot
+    const offsetY = y;
+    const cx = offsetX + 7;
+    const topY = offsetY;
+    const midY = offsetY + 7;
+    const bottomY = offsetY + size;
+    const leftX = offsetX;
+    const rightX = offsetX + size;
 
     // Outer rhombus
     commands.push({
@@ -242,15 +246,15 @@ export class EspClient {
       fill: true
     });
 
-    // Dark folds
+    // Dark folds on the right side
     commands.push({
       type: "triangle",
       x0: cx,
       y0: topY,
-      x1: cx,
-      y1: midY,
-      x2: x + 16,
-      y2: y + 3,
+      x1: rightX - 1,
+      y1: midY - 1,
+      x2: cx,
+      y2: midY,
       color: GS_ICON_DARK,
       fill: true
     });
@@ -258,22 +262,22 @@ export class EspClient {
       type: "triangle",
       x0: cx,
       y0: bottomY,
-      x1: cx,
-      y1: midY,
-      x2: x + 16,
-      y2: y + 11,
+      x1: rightX - 1,
+      y1: midY + 1,
+      x2: cx,
+      y2: midY,
       color: GS_ICON_DARK,
       fill: true
     });
 
-    // Inner hole (transparent via background color fill)
+    // Inner hole (transparent via background color)
     commands.push({
       type: "triangle",
       x0: cx,
-      y0: y + 5,
-      x1: x + 16,
+      y0: offsetY + 5,
+      x1: offsetX + 10,
       y1: midY,
-      x2: x + 6,
+      x2: offsetX + 4,
       y2: midY,
       color: BG_COLOR,
       fill: true
@@ -281,10 +285,10 @@ export class EspClient {
     commands.push({
       type: "triangle",
       x0: cx,
-      y0: y + 9,
-      x1: x + 16,
+      y0: offsetY + 9,
+      x1: offsetX + 10,
       y1: midY,
-      x2: x + 6,
+      x2: offsetX + 4,
       y2: midY,
       color: BG_COLOR,
       fill: true
