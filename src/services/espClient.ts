@@ -17,6 +17,17 @@ interface DrawBatchPayload {
         fill: boolean;
       }
     | { type: "line"; x0: number; y0: number; x1: number; y1: number; color: string }
+    | {
+        type: "triangle";
+        x0: number;
+        y0: number;
+        x1: number;
+        y1: number;
+        x2: number;
+        y2: number;
+        color: string;
+        fill: boolean;
+      }
   >;
 }
 
@@ -38,10 +49,15 @@ const ICON_COLOR = "#00ffff";
 const SCREEN_WIDTH = 240;
 const COUNT_RIGHT_PADDING = 4;
 const FONT_CHAR_WIDTH = 6;
-const COUNT_TEXT_SIZE = 3;
+const COUNT_TEXT_SIZE = 4;
 const MIN_COUNT_X = 120;
 const TRACKER_ICON_BG = "#4f525e";
 const TRACKER_ICON_FG = "#ffffff";
+const GS_ICON_LIGHT = "#4f8df5";
+const GS_ICON_DARK = "#2c5fd2";
+const YANDEX_MAIL_YELLOW = "#f4d44d";
+const YANDEX_MAIL_YELLOW_DARK = "#f0c808";
+const YANDEX_MAIL_RED = "#ff2d3b";
 
 export class EspClient {
   private readonly client: AxiosInstance;
@@ -116,19 +132,23 @@ export class EspClient {
   private buildFullCommands(state: DashboardState): DrawBatchPayload["commands"] {
     const commands: DrawBatchPayload["commands"] = [
       { type: "clear", color: BG_COLOR },
-      { type: "text", x: 12, y: 10, text: "MAIL", size: 2, color: MAIL_TITLE_COLOR }
+      // { type: "text", x: 12, y: 10, text: "MAIL", size: 2, color: MAIL_TITLE_COLOR }
     ];
 
     const rows = state.integrations.slice(0, MAX_VISIBLE_INTEGRATIONS);
     rows.forEach((item, index) => {
       const y = 50 + index * 42;
       const countText = String(item.unreadCount);
-      if (item.type === "yandex_tracker_imap" || item.type === "mail_gs_tracker_imap") {
+      if (item.type === "yandex_imap") {
+        this.drawYandexMailIcon(commands, 12, y);
+      } else if (item.type === "mail_gs_tracker_imap") {
+        this.drawGsIcon(commands, 12, y);
+      } else if (item.type === "yandex_tracker_imap") {
         this.drawTrackerIcon(commands, 12, y);
       } else {
         this.drawMailIcon(commands, 12, y);
       }
-      commands.push({ type: "text", x: 44, y: y - 2, text: item.label, size: 2, color: LABEL_COLOR });
+      commands.push({ type: "text", x: 44, y: y - 2, text: item.label, size: 3, color: LABEL_COLOR });
       commands.push({
         type: "text",
         x: this.getCountX(countText, COUNT_TEXT_SIZE),
@@ -188,6 +208,123 @@ export class EspClient {
     commands.push({ type: "rect", x: x + 9, y: y + 5, w: 4, h: 7, color: TRACKER_ICON_FG, fill: true });
     commands.push({ type: "rect", x: x + 4, y: y + 6, w: 4, h: 4, color: TRACKER_ICON_FG, fill: true });
     commands.push({ type: "rect", x: x + 14, y: y + 6, w: 4, h: 4, color: TRACKER_ICON_FG, fill: true });
+  }
+
+  private drawGsIcon(commands: DrawBatchPayload["commands"], x: number, y: number): void {
+    const cx = x + 11;
+    const topY = y;
+    const midY = y + 7;
+    const bottomY = y + 14;
+    const leftX = x;
+    const rightX = x + 22;
+
+    // Outer rhombus
+    commands.push({
+      type: "triangle",
+      x0: cx,
+      y0: topY,
+      x1: rightX,
+      y1: midY,
+      x2: leftX,
+      y2: midY,
+      color: GS_ICON_LIGHT,
+      fill: true
+    });
+    commands.push({
+      type: "triangle",
+      x0: cx,
+      y0: bottomY,
+      x1: rightX,
+      y1: midY,
+      x2: leftX,
+      y2: midY,
+      color: GS_ICON_LIGHT,
+      fill: true
+    });
+
+    // Dark folds
+    commands.push({
+      type: "triangle",
+      x0: cx,
+      y0: topY,
+      x1: cx,
+      y1: midY,
+      x2: x + 16,
+      y2: y + 3,
+      color: GS_ICON_DARK,
+      fill: true
+    });
+    commands.push({
+      type: "triangle",
+      x0: cx,
+      y0: bottomY,
+      x1: cx,
+      y1: midY,
+      x2: x + 16,
+      y2: y + 11,
+      color: GS_ICON_DARK,
+      fill: true
+    });
+
+    // Inner hole (transparent via background color fill)
+    commands.push({
+      type: "triangle",
+      x0: cx,
+      y0: y + 5,
+      x1: x + 16,
+      y1: midY,
+      x2: x + 6,
+      y2: midY,
+      color: BG_COLOR,
+      fill: true
+    });
+    commands.push({
+      type: "triangle",
+      x0: cx,
+      y0: y + 9,
+      x1: x + 16,
+      y1: midY,
+      x2: x + 6,
+      y2: midY,
+      color: BG_COLOR,
+      fill: true
+    });
+  }
+
+  private drawYandexMailIcon(commands: DrawBatchPayload["commands"], x: number, y: number): void {
+    const left = x;
+    const right = x + 22;
+    const top = y;
+    const midY = y + 7;
+    const bottom = y + 14;
+    const centerX = x + 11;
+
+    // Envelope body
+    commands.push({ type: "rect", x: left, y: top, w: 22, h: 14, color: YANDEX_MAIL_YELLOW, fill: true });
+    commands.push({
+      type: "triangle",
+      x0: left,
+      y0: bottom,
+      x1: centerX,
+      y1: midY,
+      x2: right,
+      y2: bottom,
+      color: YANDEX_MAIL_YELLOW_DARK,
+      fill: true
+    });
+
+    // Red top flap
+    commands.push({
+      type: "triangle",
+      x0: left,
+      y0: top,
+      x1: right,
+      y1: top,
+      x2: centerX,
+      y2: midY + 1,
+      color: YANDEX_MAIL_RED,
+      fill: true
+    });
   }
 
   private async postWithRetry(url: string, payload: unknown): Promise<void> {
