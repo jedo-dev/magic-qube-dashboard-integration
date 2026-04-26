@@ -37,7 +37,7 @@ export class SyncService {
     try {
       const results = await this.integrationService.runAllEnabled();
       const hasSuccess = results.some((item) => item.success);
-      const shouldForceFull = hasSuccess && this.firstSuccessfulPollPending;
+      const shouldForceFull = trigger === "manual" || (hasSuccess && this.firstSuccessfulPollPending);
       if (shouldForceFull) {
         this.firstSuccessfulPollPending = false;
       }

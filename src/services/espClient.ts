@@ -65,6 +65,7 @@ export class EspClient {
   private readonly client: AxiosInstance;
   private shouldForceFull = true;
   private wasUnavailable = false;
+  private lastFullRenderAt = 0;
 
   constructor() {
     this.client = axios.create({
@@ -83,12 +84,14 @@ export class EspClient {
       return;
     }
 
-    const forceFull = options?.forceFull === true || this.shouldForceFull || this.wasUnavailable;
+    const forceFull =
+      options?.forceFull === true || this.shouldForceFull || this.wasUnavailable || this.isPeriodicFullDue();
 
     try {
       if (forceFull || !previous || this.shouldLayoutFullRender(previous, next)) {
         await this.sendFullRender(next);
         this.shouldForceFull = false;
+        this.lastFullRenderAt = Date.now();
       } else {
         await this.sendDeltaRender(previous, next);
       }
@@ -102,6 +105,14 @@ export class EspClient {
 
   forceFullOnNextPush(): void {
     this.shouldForceFull = true;
+  }
+
+  private isPeriodicFullDue(): boolean {
+    if (this.lastFullRenderAt === 0) {
+      return true;
+    }
+    const intervalMs = env.esp.fullRenderIntervalSec * 1000;
+    return Date.now() - this.lastFullRenderAt >= intervalMs;
   }
 
   private shouldLayoutFullRender(previous: DashboardState, next: DashboardState): boolean {

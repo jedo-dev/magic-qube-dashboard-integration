@@ -30,6 +30,7 @@ export const env = {
     stopGifEndpoint: "/api/v1/gif/stop",
     timeoutMs: asNumber(process.env.ESP_TIMEOUT_MS, 4000),
     retryCount: asNumber(process.env.ESP_RETRY_COUNT, 3),
-    retryDelayMs: asNumber(process.env.ESP_RETRY_DELAY_MS, 1000)
+    retryDelayMs: asNumber(process.env.ESP_RETRY_DELAY_MS, 1000),
+    fullRenderIntervalSec: asNumber(process.env.ESP_FULL_RENDER_INTERVAL_SEC, 120)
   }
 };
