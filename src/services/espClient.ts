@@ -17,6 +17,7 @@ interface DrawBatchPayload {
         fill: boolean;
       }
     | { type: "line"; x0: number; y0: number; x1: number; y1: number; color: string }
+    | { type: "circle"; x: number; y: number; r: number; color: string; fill: boolean }
     | {
         type: "triangle";
         x0: number;
@@ -53,6 +54,7 @@ const COUNT_TEXT_SIZE = 4;
 const MIN_COUNT_X = 120;
 const TRACKER_ICON_BG = "#4f525e";
 const TRACKER_ICON_FG = "#ffffff";
+const TRACKER_ICON_BLUE = "#5a84e8";
 const GS_ICON_LIGHT = "#4f8df5";
 const GS_ICON_DARK = "#2c5fd2";
 const YANDEX_MAIL_YELLOW = "#f4d44d";
@@ -202,12 +204,15 @@ export class EspClient {
   }
 
   private drawTrackerIcon(commands: DrawBatchPayload["commands"], x: number, y: number): void {
-    // Simple Tracker-like glyph: gray tile with white "T" made from blocks.
-    commands.push({ type: "rect", x, y, w: 22, h: 14, color: TRACKER_ICON_BG, fill: true });
-    commands.push({ type: "rect", x: x + 4, y: y + 2, w: 14, h: 3, color: TRACKER_ICON_FG, fill: true });
-    commands.push({ type: "rect", x: x + 9, y: y + 5, w: 4, h: 7, color: TRACKER_ICON_FG, fill: true });
-    commands.push({ type: "rect", x: x + 4, y: y + 6, w: 4, h: 4, color: TRACKER_ICON_FG, fill: true });
-    commands.push({ type: "rect", x: x + 14, y: y + 6, w: 4, h: 4, color: TRACKER_ICON_FG, fill: true });
+    // Circular Tracker mark with block "T"
+    const cx = x + 11;
+    const cy = y + 7;
+    commands.push({ type: "circle", x: cx, y: cy, r: 7, color: TRACKER_ICON_BLUE, fill: true });
+    commands.push({ type: "rect", x: x + 4, y: y + 2, w: 4, h: 3, color: TRACKER_ICON_FG, fill: true });
+    commands.push({ type: "rect", x: x + 9, y: y + 2, w: 4, h: 3, color: TRACKER_ICON_FG, fill: true });
+    commands.push({ type: "rect", x: x + 14, y: y + 2, w: 4, h: 3, color: TRACKER_ICON_FG, fill: true });
+    commands.push({ type: "rect", x: x + 9, y: y + 6, w: 4, h: 3, color: TRACKER_ICON_FG, fill: true });
+    commands.push({ type: "rect", x: x + 9, y: y + 10, w: 4, h: 3, color: TRACKER_ICON_FG, fill: true });
   }
 
   private drawGsIcon(commands: DrawBatchPayload["commands"], x: number, y: number): void {
