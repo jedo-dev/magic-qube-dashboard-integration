@@ -37,8 +37,11 @@ jobs:
           CREDENTIALS_ENCRYPTION_KEY=${{ secrets.CREDENTIALS_ENCRYPTION_KEY }}
           EOF
 
+      - name: Pull base images
+        run: docker compose pull
+
       - name: Build image
-        run: docker compose build --pull
+        run: docker compose build
 
       - name: Deploy
         run: docker compose up -d --build --remove-orphans
