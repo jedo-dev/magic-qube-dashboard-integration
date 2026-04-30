@@ -38,10 +38,10 @@ jobs:
           EOF
 
       - name: Pull base images
-        run: docker compose pull
+        run: docker-compose pull
 
       - name: Build image
-        run: docker compose build
+        run: docker-compose build
 
       - name: Deploy
-        run: docker compose up -d --build --remove-orphans
+        run: docker-compose up -d --build --remove-orphans
