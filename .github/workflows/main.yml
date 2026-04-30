@@ -20,7 +20,7 @@ jobs:
         run: |
           cat > .env <<EOF
           HOST=0.0.0.0
-          PORT=${{ secrets.PORT }}
+          PORT=4715
           MONGO_URI=${{ secrets.MONGO_URI }}
           LOG_LEVEL=${{ secrets.LOG_LEVEL }}
           API_KEY=${{ secrets.API_KEY }}
