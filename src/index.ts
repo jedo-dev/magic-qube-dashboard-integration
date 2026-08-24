@@ -8,6 +8,9 @@ import { DashboardService } from "./services/dashboardService";
 import { EspClient } from "./services/espClient";
 import { IntegrationService } from "./services/integrationService";
 import { SyncService } from "./services/syncService";
+import { DisplayService } from "./services/displayService";
+import { MailReaderService } from "./services/mailReaderService";
+import { PolzaService } from "./services/polzaService";
 
 const bootstrap = async () => {
   if (!env.apiKey) {
@@ -22,12 +25,14 @@ const bootstrap = async () => {
   const espClient = new EspClient();
   const syncService = new SyncService(integrationService, dashboardService, espClient);
   const scheduler = new PollScheduler(syncService, integrationService);
+  const displayService = new DisplayService(new MailReaderService(), new PolzaService());
 
   const app = createApp({
     integrationService,
     dashboardService,
     syncService,
-    scheduler
+    scheduler,
+    displayService
   });
 
   await syncService.renderStartup();

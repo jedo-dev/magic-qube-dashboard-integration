@@ -35,6 +35,7 @@ jobs:
           MAX_CONCURRENT_JOBS=${{ secrets.MAX_CONCURRENT_JOBS }}
           IMAP_CONNECT_TIMEOUT_MS=${{ secrets.IMAP_CONNECT_TIMEOUT_MS }}
           CREDENTIALS_ENCRYPTION_KEY=${{ secrets.CREDENTIALS_ENCRYPTION_KEY }}
+          POLZA_API_KEY=${{ secrets.POLZA_API_KEY }}
           EOF
 
       - name: Pull base images

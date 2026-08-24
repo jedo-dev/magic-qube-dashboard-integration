@@ -23,6 +23,7 @@ export const env = {
   maxConcurrentJobs: asNumber(process.env.MAX_CONCURRENT_JOBS, 2),
   imapConnectTimeoutMs: asNumber(process.env.IMAP_CONNECT_TIMEOUT_MS, 10000),
   stopGifOnRender: (process.env.STOP_GIF_ON_RENDER ?? "false").toLowerCase() === "true",
+  polzaApiKey: process.env.POLZA_API_KEY ?? "",
   esp: {
     baseUrl: process.env.ESP_BASE_URL ?? "",
     drawBatchEndpoint: "/api/v1/draw/batch",

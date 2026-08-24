@@ -6,6 +6,7 @@ import { PollScheduler } from "../scheduler/pollScheduler";
 import { DashboardService } from "../services/dashboardService";
 import { IntegrationService } from "../services/integrationService";
 import { SyncService } from "../services/syncService";
+import { DisplayService } from "../services/displayService";
 import {
   BadRequestError,
   parseCreateIntegrationBody,
@@ -17,6 +18,7 @@ interface RouterDeps {
   dashboardService: DashboardService;
   syncService: SyncService;
   scheduler: PollScheduler;
+  displayService: DisplayService;
 }
 
 export const createRouter = (deps: RouterDeps): Router => {
@@ -84,6 +86,37 @@ export const createRouter = (deps: RouterDeps): Router => {
     } catch (error) {
       next(error);
     }
+  });
+
+  /* ---- Token Monitor display (ESP32-S3-Touch-LCD-4) ---- */
+
+  router.get("/display/state", async (_req, res, next) => {
+    try {
+      res.json(await deps.displayService.getState());
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/display/mail/:integrationId/:uid", async (req, res, next) => {
+    try {
+      if (!mongoose.Types.ObjectId.isValid(req.params.integrationId)) {
+        throw new BadRequestError("Invalid integration id");
+      }
+      const message = await deps.displayService.getMessage(req.params.integrationId, req.params.uid);
+      if (!message) {
+        res.status(404).json({ message: "Message not found" });
+        return;
+      }
+      res.json(message);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/display/ingest", (req, res) => {
+    deps.displayService.ingestUsage(req.body ?? {});
+    res.json({ ok: true });
   });
 
   return router;

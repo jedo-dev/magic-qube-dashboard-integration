@@ -6,6 +6,7 @@ import { PollScheduler } from "./scheduler/pollScheduler";
 import { DashboardService } from "./services/dashboardService";
 import { IntegrationService } from "./services/integrationService";
 import { SyncService } from "./services/syncService";
+import { DisplayService } from "./services/displayService";
 import { BadRequestError } from "./http/parse";
 import { apiKeyMiddleware } from "./http/apiKeyMiddleware";
 
@@ -14,6 +15,7 @@ interface AppDeps {
   dashboardService: DashboardService;
   syncService: SyncService;
   scheduler: PollScheduler;
+  displayService: DisplayService;
 }
 
 export const createApp = (deps: AppDeps) => {
