@@ -36,6 +36,8 @@ jobs:
           IMAP_CONNECT_TIMEOUT_MS=${{ secrets.IMAP_CONNECT_TIMEOUT_MS }}
           CREDENTIALS_ENCRYPTION_KEY=${{ secrets.CREDENTIALS_ENCRYPTION_KEY }}
           POLZA_API_KEY=${{ secrets.POLZA_API_KEY }}
+          WEATHER_LAT=${{ secrets.WEATHER_LAT }}
+          WEATHER_LON=${{ secrets.WEATHER_LON }}
           EOF
 
       - name: Pull base images

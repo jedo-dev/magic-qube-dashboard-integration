@@ -114,6 +114,21 @@ export const createRouter = (deps: RouterDeps): Router => {
     }
   });
 
+  router.delete("/display/task/:integrationId/:taskKey", async (req, res, next) => {
+    try {
+      if (!mongoose.Types.ObjectId.isValid(req.params.integrationId)) {
+        throw new BadRequestError("Invalid integration id");
+      }
+      const deleted = await deps.displayService.deleteTask(
+        req.params.integrationId,
+        req.params.taskKey
+      );
+      res.json({ ok: deleted });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.post("/display/ingest", (req, res) => {
     deps.displayService.ingestUsage(req.body ?? {});
     res.json({ ok: true });

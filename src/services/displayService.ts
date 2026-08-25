@@ -1,9 +1,16 @@
+import { env } from "../config/env";
 import { logger } from "../config/logger";
 import { Integration, IntegrationDocument } from "../models/integration";
-import { ImapCredentials } from "../types/integration";
+import { TrackerTask } from "../models/trackerTask";
+import { ImapCredentials, IntegrationType } from "../types/integration";
 import { deserializeCredentials } from "../utils/crypto";
 import { MailListItem, MailReaderService } from "./mailReaderService";
 import { PolzaService } from "./polzaService";
+
+/** Типы, у которых письмо соответствует задаче в Mongo. */
+const TASK_TYPES: IntegrationType[] = ["yandex_tracker_imap", "mail_gs_tracker_imap"];
+const TASK_KEY_REGEX = /\b[A-Z][A-Z0-9]+-\d+\b/;
+const WEATHER_CACHE_MS = 900_000;
 
 const MAIL_CACHE_MS = 60_000;
 const USAGE_STALE_MS = 300_000;
@@ -36,6 +43,36 @@ export class DisplayService {
   private usageAt = 0;
   private mailCache = new Map<string, { at: number; box: DisplayMailbox }>();
   private refreshing = new Set<string>();
+  private weather: { at: number; data: Record<string, unknown> } = { at: 0, data: {} };
+
+  /** Температура и рассвет/закат — open-meteo, без ключа. */
+  private async getWeather(): Promise<Record<string, unknown>> {
+    if (Date.now() - this.weather.at < WEATHER_CACHE_MS && Object.keys(this.weather.data).length) {
+      return this.weather.data;
+    }
+    try {
+      const url =
+        `https://api.open-meteo.com/v1/forecast?latitude=${env.weatherLat}` +
+        `&longitude=${env.weatherLon}&current=temperature_2m&daily=sunrise,sunset` +
+        "&timezone=auto&forecast_days=1";
+      const response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+      const json = (await response.json()) as {
+        current?: { temperature_2m?: number };
+        daily?: { sunrise?: string[]; sunset?: string[] };
+      };
+      this.weather = {
+        at: Date.now(),
+        data: {
+          temp_c: Number((json.current?.temperature_2m ?? 0).toFixed(1)),
+          sunrise: json.daily?.sunrise?.[0]?.slice(11, 16) ?? "--:--",
+          sunset: json.daily?.sunset?.[0]?.slice(11, 16) ?? "--:--"
+        }
+      };
+    } catch (error) {
+      logger.warn({ err: error }, "weather request failed");
+    }
+    return this.weather.data;
+  }
 
   constructor(
     private readonly mailReader: MailReaderService,
@@ -109,23 +146,30 @@ export class DisplayService {
 
     /* На плату отдаём только то, что реально рисуется: лишние поля
        раздували ответ до десятков килобайт. */
-    const compact = mailboxes.map((box) => ({
-      id: box.id,
-      label: box.label,
-      color: box.color,
-      unread: box.unread,
-      error: box.error,
-      messages: box.messages.slice(0, MESSAGES_ON_DISPLAY).map((m) => ({
-        uid: m.uid,
-        from: m.from,
-        subject: m.subject,
-        when: m.when,
-        seen: m.seen
-      }))
-    }));
+    const compact = mailboxes.map((box, i) => {
+      const hasTasks = TASK_TYPES.includes(integrations[i].type);
+      return {
+        id: box.id,
+        label: box.label,
+        color: box.color,
+        unread: box.unread,
+        error: box.error,
+        tasks: hasTasks,
+        messages: box.messages.slice(0, MESSAGES_ON_DISPLAY).map((m) => ({
+          uid: m.uid,
+          from: m.from,
+          subject: m.subject,
+          when: m.when,
+          seen: m.seen,
+          /* ключ задачи, чтобы её можно было удалить прямо с экрана */
+          task: hasTasks ? m.subject.match(TASK_KEY_REGEX)?.[0] : undefined
+        }))
+      };
+    });
 
     const now = new Date();
     return {
+      ...(await this.getWeather()),
       time: now.toTimeString().slice(0, 5),
       date: now.toDateString().slice(0, 10),
       claude: {
@@ -136,6 +180,13 @@ export class DisplayService {
       mailboxes: compact,
       unreadTotal: mailboxes.reduce((sum, box) => sum + box.unread, 0)
     };
+  }
+
+  /** Удалить задачу трекера из Mongo — счётчик пересчитается на следующем опросе. */
+  async deleteTask(integrationId: string, taskKey: string): Promise<boolean> {
+    const result = await TrackerTask.deleteOne({ integrationId, taskKey });
+    logger.info({ integrationId, taskKey, deleted: result.deletedCount }, "task delete from display");
+    return (result.deletedCount ?? 0) > 0;
   }
 
   async getMessage(integrationId: string, uid: string) {
