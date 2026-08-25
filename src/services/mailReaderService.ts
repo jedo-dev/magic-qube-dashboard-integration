@@ -30,7 +30,7 @@ const DEFAULT_HOSTS: Partial<Record<IntegrationType, string>> = {
   mail_gs_tracker_imap: "imap.mail.ru"
 };
 
-const whenLabel = (date: Date): string => {
+export const whenLabel = (date: Date): string => {
   const now = new Date();
   const sameDay =
     date.getDate() === now.getDate() &&
@@ -122,6 +122,10 @@ export class MailReaderService {
     });
   }
 
+  /**
+   * Читает письмо и помечает его прочитанным (\Seen) — как если бы его
+   * открыли в почтовом клиенте.
+   */
   async getBody(
     type: IntegrationType,
     credentials: ImapCredentials,
@@ -129,7 +133,7 @@ export class MailReaderService {
     maxChars = 4000
   ): Promise<MailBody | null> {
     return this.withClient(type, credentials, async (client) => {
-      const lock = await client.getMailboxLock("INBOX", { readOnly: true });
+      const lock = await client.getMailboxLock("INBOX");
       try {
         const downloaded = await client.download(uid, undefined, { uid: true });
         if (!downloaded?.content) {
@@ -137,6 +141,10 @@ export class MailReaderService {
         }
 
         const parsed = await simpleParser(downloaded.content);
+
+        await client
+          .messageFlagsAdd(uid, ["\\Seen"], { uid: true })
+          .catch((error) => logger.warn({ err: error, uid }, "failed to mark seen"));
         const html = typeof parsed.html === "string" ? parsed.html : "";
         const body = parsed.text?.trim() || clean(html.replace(/<[^>]+>/g, " "), maxChars);
 

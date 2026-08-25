@@ -21,7 +21,7 @@ export const env = {
   defaultPollIntervalSec: asNumber(process.env.DEFAULT_POLL_INTERVAL_SEC, 60),
   schedulerTickSec: asNumber(process.env.SCHEDULER_TICK_SEC, 2),
   maxConcurrentJobs: asNumber(process.env.MAX_CONCURRENT_JOBS, 2),
-  imapConnectTimeoutMs: asNumber(process.env.IMAP_CONNECT_TIMEOUT_MS, 10000),
+  imapConnectTimeoutMs: asNumber(process.env.IMAP_CONNECT_TIMEOUT_MS, 25000),
   stopGifOnRender: (process.env.STOP_GIF_ON_RENDER ?? "false").toLowerCase() === "true",
   polzaApiKey: process.env.POLZA_API_KEY ?? "",
   weatherLat: process.env.WEATHER_LAT ?? "55.75",

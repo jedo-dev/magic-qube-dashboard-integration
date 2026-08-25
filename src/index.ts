@@ -1,3 +1,4 @@
+import dns from "node:dns";
 import { createApp } from "./app";
 import { AdapterFactory } from "./adapters/factory";
 import { env } from "./config/env";
@@ -11,6 +12,10 @@ import { SyncService } from "./services/syncService";
 import { DisplayService } from "./services/displayService";
 import { MailReaderService } from "./services/mailReaderService";
 import { PolzaService } from "./services/polzaService";
+
+/* У хоста нет IPv6-маршрута: без этого Node сначала долбится в AAAA-адреса
+   почтовиков и ловит ENETUNREACH перед каждым подключением. */
+dns.setDefaultResultOrder("ipv4first");
 
 const bootstrap = async () => {
   if (!env.apiKey) {

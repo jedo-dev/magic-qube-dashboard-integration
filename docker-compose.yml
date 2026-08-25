@@ -10,5 +10,10 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    # Резолвер хоста периодически отдаёт EAI_AGAIN на imap.mail.ru —
+    # ходим в публичные DNS напрямую.
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     ports:
       - "4715:4715"

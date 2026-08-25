@@ -4,7 +4,7 @@ import { Integration, IntegrationDocument } from "../models/integration";
 import { TrackerTask } from "../models/trackerTask";
 import { ImapCredentials, IntegrationType } from "../types/integration";
 import { deserializeCredentials } from "../utils/crypto";
-import { MailListItem, MailReaderService } from "./mailReaderService";
+import { MailListItem, MailReaderService, whenLabel } from "./mailReaderService";
 import { PolzaService } from "./polzaService";
 
 /** Типы, у которых письмо соответствует задаче в Mongo. */
@@ -12,7 +12,11 @@ const TASK_TYPES: IntegrationType[] = ["yandex_tracker_imap", "mail_gs_tracker_i
 const TASK_KEY_REGEX = /\b[A-Z][A-Z0-9]+-\d+\b/;
 const WEATHER_CACHE_MS = 900_000;
 
-const MAIL_CACHE_MS = 60_000;
+/* Каждое обновление — отдельное IMAP-соединение на ящик. Реже = меньше
+   нагрузки на почтовики и меньше таймаутов на слабой сети. */
+const MAIL_CACHE_MS = 180_000;
+/* После ошибки не долбимся в тот же ящик каждые 3 минуты. */
+const MAIL_ERROR_BACKOFF_MS = 600_000;
 const USAGE_STALE_MS = 300_000;
 /** Столько писем помещается в список на экране 480×480 с запасом на прокрутку. */
 const MESSAGES_ON_DISPLAY = 10;
@@ -93,11 +97,38 @@ export class DisplayService {
    * ждать IMAP. Устаревший кэш обновляется в фоне, к следующему опросу данные
    * уже свежие.
    */
+  /** Для трекер-интеграций список — это сами задачи из Mongo, а не письма:
+      удалённая задача исчезает сразу и навсегда, письмо в ящике не мешает. */
+  private async taskBox(doc: IntegrationDocument): Promise<DisplayMailbox> {
+    const id = String(doc._id);
+    const tasks = await TrackerTask.find({ integrationId: id })
+      .sort({ lastEventAt: -1 })
+      .limit(MESSAGES_ON_DISPLAY)
+      .lean();
+
+    return {
+      id,
+      label: doc.label,
+      color: doc.color,
+      unread: await TrackerTask.countDocuments({ integrationId: id }),
+      messages: tasks.map((task) => ({
+        uid: String(task.lastMailUid ?? ""),
+        from: task.taskKey,
+        fromAddress: "",
+        subject: task.rawSubject?.trim() || task.taskKey,
+        date: new Date(task.lastEventAt).toISOString(),
+        when: whenLabel(new Date(task.lastEventAt)),
+        seen: true
+      }))
+    };
+  }
+
   private mailboxFor(doc: IntegrationDocument): DisplayMailbox {
     const id = String(doc._id);
     const cached = this.mailCache.get(id);
+    const ttl = cached?.box.error ? MAIL_ERROR_BACKOFF_MS : MAIL_CACHE_MS;
 
-    if (!cached || Date.now() - cached.at >= MAIL_CACHE_MS) {
+    if (!cached || Date.now() - cached.at >= ttl) {
       this.refreshMailbox(doc);
     }
 
@@ -142,7 +173,11 @@ export class DisplayService {
 
   async getState() {
     const integrations = await Integration.find({ enabled: true }).sort({ sortOrder: 1, createdAt: 1 });
-    const mailboxes = integrations.map((doc) => this.mailboxFor(doc));
+    const mailboxes = await Promise.all(
+      integrations.map((doc) =>
+        TASK_TYPES.includes(doc.type) ? this.taskBox(doc) : this.mailboxFor(doc)
+      )
+    );
 
     /* На плату отдаём только то, что реально рисуется: лишние поля
        раздували ответ до десятков килобайт. */
@@ -162,7 +197,7 @@ export class DisplayService {
           when: m.when,
           seen: m.seen,
           /* ключ задачи, чтобы её можно было удалить прямо с экрана */
-          task: hasTasks ? m.subject.match(TASK_KEY_REGEX)?.[0] : undefined
+          task: hasTasks ? m.from || m.subject.match(TASK_KEY_REGEX)?.[0] : undefined
         }))
       };
     });
@@ -182,10 +217,16 @@ export class DisplayService {
     };
   }
 
-  /** Удалить задачу трекера из Mongo — счётчик пересчитается на следующем опросе. */
+  /** Удалить задачу трекера и сразу же обновить счётчик на плитке. */
   async deleteTask(integrationId: string, taskKey: string): Promise<boolean> {
     const result = await TrackerTask.deleteOne({ integrationId, taskKey });
-    logger.info({ integrationId, taskKey, deleted: result.deletedCount }, "task delete from display");
+    const left = await TrackerTask.countDocuments({ integrationId });
+    await Integration.updateOne({ _id: integrationId }, { lastUnreadCount: left });
+
+    logger.info(
+      { integrationId, taskKey, deleted: result.deletedCount, left },
+      "task deleted from display"
+    );
     return (result.deletedCount ?? 0) > 0;
   }
 
@@ -194,6 +235,22 @@ export class DisplayService {
     if (!doc) {
       return null;
     }
-    return this.mailReader.getBody(doc.type, this.credentialsOf(doc), uid);
+    const body = await this.mailReader.getBody(doc.type, this.credentialsOf(doc), uid);
+
+    /* письмо только что стало прочитанным — поправим кэш и счётчик,
+       не дожидаясь следующего опроса ящика */
+    if (body) {
+      const cached = this.mailCache.get(String(doc._id));
+      const item = cached?.box.messages.find((m) => m.uid === uid);
+      if (item && !item.seen) {
+        item.seen = true;
+        cached!.box.unread = Math.max(0, cached!.box.unread - 1);
+        await Integration.updateOne(
+          { _id: doc._id },
+          { lastUnreadCount: cached!.box.unread }
+        );
+      }
+    }
+    return body;
   }
 }
