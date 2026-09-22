@@ -20,6 +20,8 @@ const MAIL_ERROR_BACKOFF_MS = 600_000;
 const USAGE_STALE_MS = 300_000;
 /** Столько писем помещается в список на экране 480×480 с запасом на прокрутку. */
 const MESSAGES_ON_DISPLAY = 10;
+/** Задач отдаём больше: на дисплее их список прокручивается в модалке. */
+const TASKS_ON_DISPLAY = 30;
 
 export interface DisplayMailbox {
   id: string;
@@ -156,7 +158,7 @@ export class DisplayService {
     const id = String(doc._id);
     const tasks = await TrackerTask.find({ integrationId: id })
       .sort({ lastEventAt: -1 })
-      .limit(MESSAGES_ON_DISPLAY)
+      .limit(TASKS_ON_DISPLAY)
       .lean();
 
     return {
@@ -243,7 +245,7 @@ export class DisplayService {
         unread: box.unread,
         error: box.error,
         tasks: hasTasks,
-        messages: box.messages.slice(0, MESSAGES_ON_DISPLAY).map((m) => ({
+        messages: box.messages.slice(0, hasTasks ? TASKS_ON_DISPLAY : MESSAGES_ON_DISPLAY).map((m) => ({
           uid: m.uid,
           from: m.from,
           subject: m.subject,
