@@ -40,11 +40,17 @@ export interface UsagePayload {
   cost_today_usd?: number;
   busy?: boolean;
   host?: string;
+  /** ok | token_expired | no_token | unavailable — см. agent/claude_limits.py */
+  usage_status?: string;
 }
 
+/** Машины, которые давно молчат, в сводку не берём. */
+const SOURCE_FORGET_MS = 24 * 3600_000;
+
 export class DisplayService {
-  private usage: UsagePayload = {};
-  private usageAt = 0;
+  /* Данные могут приходить с нескольких машин (ПК, ноутбук): держим
+     последний пакет от каждой и сводим их, иначе экран прыгал бы между ними. */
+  private usageSources = new Map<string, { at: number; data: UsagePayload }>();
   private mailCache = new Map<string, { at: number; box: DisplayMailbox }>();
   private refreshing = new Set<string>();
   private weather: { at: number; data: Record<string, unknown> } = { at: 0, data: {} };
@@ -57,17 +63,20 @@ export class DisplayService {
     try {
       const url =
         `https://api.open-meteo.com/v1/forecast?latitude=${env.weatherLat}` +
-        `&longitude=${env.weatherLon}&current=temperature_2m&daily=sunrise,sunset` +
+        `&longitude=${env.weatherLon}&current=temperature_2m,weather_code,is_day&daily=sunrise,sunset` +
         "&timezone=auto&forecast_days=1";
       const response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
       const json = (await response.json()) as {
-        current?: { temperature_2m?: number };
+        current?: { temperature_2m?: number; weather_code?: number; is_day?: number };
         daily?: { sunrise?: string[]; sunset?: string[] };
       };
       this.weather = {
         at: Date.now(),
         data: {
           temp_c: Number((json.current?.temperature_2m ?? 0).toFixed(1)),
+          /* WMO-код и день/ночь — дисплей выбирает по ним иконку */
+          weather_code: json.current?.weather_code ?? -1,
+          is_day: json.current?.is_day ?? 1,
           sunrise: json.daily?.sunrise?.[0]?.slice(11, 16) ?? "--:--",
           sunset: json.daily?.sunset?.[0]?.slice(11, 16) ?? "--:--"
         }
@@ -84,8 +93,52 @@ export class DisplayService {
   ) {}
 
   ingestUsage(payload: UsagePayload): void {
-    this.usage = payload;
-    this.usageAt = Date.now();
+    const host = payload.host || "default";
+    this.usageSources.set(host, { at: Date.now(), data: payload });
+  }
+
+  /**
+   * Сводка по всем машинам.
+   * Лимиты общие на аккаунт — берём самые свежие с рабочим токеном: если на
+   * ноутбуке токен протух, а на ПК живой, показываем цифры с ПК.
+   * Токены и стоимость за день считаются по локальным журналам каждой
+   * машины — их складываем. «Работает» — если работает хоть одна.
+   */
+  private mergedUsage(): UsagePayload & { stale: boolean; hosts: string[] } {
+    const now = Date.now();
+    for (const [host, src] of this.usageSources) {
+      if (now - src.at > SOURCE_FORGET_MS) {
+        this.usageSources.delete(host);
+      }
+    }
+
+    const fresh = [...this.usageSources.entries()]
+      .filter(([, src]) => now - src.at <= USAGE_STALE_MS)
+      .sort((a, b) => b[1].at - a[1].at);
+    if (!fresh.length) {
+      const last = [...this.usageSources.values()].sort((a, b) => b.at - a.at)[0];
+      return { ...(last?.data ?? {}), busy: false, stale: true, hosts: [] };
+    }
+
+    const withLimits =
+      fresh.find(([, src]) => src.data.usage_status === "ok") ?? fresh[0];
+    const limits = withLimits[1].data;
+
+    return {
+      usage_status: limits.usage_status,
+      block_pct: limits.block_pct,
+      reset_min: limits.reset_min,
+      week_pct: limits.week_pct,
+      week_reset_min: limits.week_reset_min,
+      tokens_today: fresh.reduce((sum, [, src]) => sum + (src.data.tokens_today ?? 0), 0),
+      cost_today_usd: Number(
+        fresh.reduce((sum, [, src]) => sum + (src.data.cost_today_usd ?? 0), 0).toFixed(2)
+      ),
+      busy: fresh.some(([, src]) => src.data.busy),
+      host: withLimits[0],
+      hosts: fresh.map(([host]) => host),
+      stale: false
+    };
   }
 
   private credentialsOf(doc: IntegrationDocument): ImapCredentials {
@@ -208,8 +261,7 @@ export class DisplayService {
       time: now.toTimeString().slice(0, 5),
       date: now.toDateString().slice(0, 10),
       claude: {
-        ...this.usage,
-        stale: Date.now() - this.usageAt > USAGE_STALE_MS
+        ...this.mergedUsage()
       },
       polza: await this.polza.getState(),
       mailboxes: compact,
