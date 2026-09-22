@@ -38,6 +38,7 @@ jobs:
           POLZA_API_KEY=${{ secrets.POLZA_API_KEY }}
           WEATHER_LAT=${{ secrets.WEATHER_LAT }}
           WEATHER_LON=${{ secrets.WEATHER_LON }}
+          TIME_ZONE=${{ secrets.TIME_ZONE }}
           EOF
 
       - name: Pull base images

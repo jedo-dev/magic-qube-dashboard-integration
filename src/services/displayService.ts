@@ -49,6 +49,30 @@ export interface UsagePayload {
 /** Машины, которые давно молчат, в сводку не берём. */
 const SOURCE_FORGET_MS = 24 * 3600_000;
 
+/**
+ * Часы и дата для дисплея в часовом поясе владельца, а не контейнера
+ * (в Docker это UTC). Формат даты «Tue Sep 22» — прошивка переводит сам.
+ */
+const localClock = (now: Date): { time: string; date: string } => {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: env.timeZone,
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23"
+    })
+      .formatToParts(now)
+      .map((part) => [part.type, part.value])
+  );
+  return {
+    time: `${parts.hour}:${parts.minute}`,
+    date: `${parts.weekday} ${parts.month} ${parts.day}`
+  };
+};
+
 export class DisplayService {
   /* Данные могут приходить с нескольких машин (ПК, ноутбук): держим
      последний пакет от каждой и сводим их, иначе экран прыгал бы между ними. */
@@ -260,8 +284,7 @@ export class DisplayService {
     const now = new Date();
     return {
       ...(await this.getWeather()),
-      time: now.toTimeString().slice(0, 5),
-      date: now.toDateString().slice(0, 10),
+      ...localClock(now),
       claude: {
         ...this.mergedUsage()
       },

@@ -24,8 +24,10 @@ export const env = {
   imapConnectTimeoutMs: asNumber(process.env.IMAP_CONNECT_TIMEOUT_MS, 25000),
   stopGifOnRender: (process.env.STOP_GIF_ON_RENDER ?? "false").toLowerCase() === "true",
   polzaApiKey: process.env.POLZA_API_KEY ?? "",
-  weatherLat: process.env.WEATHER_LAT ?? "55.75",
-  weatherLon: process.env.WEATHER_LON ?? "37.62",
+  // `||`, а не `??`: workflow пишет пустую строку, если секрет не заведён
+  weatherLat: process.env.WEATHER_LAT || "55.75",
+  weatherLon: process.env.WEATHER_LON || "37.62",
+  timeZone: process.env.TIME_ZONE || "Europe/Moscow",
   esp: {
     baseUrl: process.env.ESP_BASE_URL ?? "",
     drawBatchEndpoint: "/api/v1/draw/batch",
