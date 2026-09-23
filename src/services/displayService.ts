@@ -74,6 +74,74 @@ const localClock = (now: Date): { time: string; date: string } => {
   };
 };
 
+interface MetForecast {
+  properties?: {
+    timeseries?: {
+      data?: {
+        instant?: { details?: { air_temperature?: number } };
+        next_1_hours?: { summary?: { symbol_code?: string } };
+        next_6_hours?: { summary?: { symbol_code?: string } };
+      };
+    }[];
+  };
+}
+
+interface MetSun {
+  properties?: { sunrise?: { time?: string }; sunset?: { time?: string } };
+}
+
+const MET_USER_AGENT = "token-monitor/1.0 github.com/jedo-dev/token-monitor";
+
+const metNo = async <T>(path: string): Promise<T> => {
+  const response = await fetch(`https://api.met.no/weatherapi/${path}`, {
+    headers: { "User-Agent": MET_USER_AGENT, Accept: "application/json" },
+    signal: AbortSignal.timeout(10_000)
+  });
+  if (!response.ok) {
+    throw new Error(`met.no ${path.split("?")[0]} responded ${response.status}`);
+  }
+  return (await response.json()) as T;
+};
+
+/** Сегодняшняя дата и смещение («+03:00») в часовом поясе владельца. */
+const localDate = (now: Date): { date: string; offset: string } => {
+  const date = new Intl.DateTimeFormat("en-CA", { timeZone: env.timeZone }).format(now);
+  const zone =
+    new Intl.DateTimeFormat("en-US", { timeZone: env.timeZone, timeZoneName: "longOffset" })
+      .formatToParts(now)
+      .find((part) => part.type === "timeZoneName")?.value ?? "GMT";
+  const offset = zone === "GMT" ? "+00:00" : zone.replace("GMT", "");
+  return { date, offset };
+};
+
+/**
+ * Символ met.no («partlycloudy_day», «lightrain») → WMO-код, который
+ * понимает прошивка: 0 ясно, 1–2 малооблачно, 3 облачно, 45 туман,
+ * 61 дождь, 71 снег, 95 гроза, -1 неизвестно.
+ */
+const wmoFromMetSymbol = (symbol: string): number => {
+  const base = symbol.replace(/_(day|night|polartwilight)$/, "");
+  if (!base) return -1;
+  if (base.includes("thunder")) return 95;
+  if (base.includes("snow") || base.includes("sleet")) return 71;
+  if (base.includes("rain")) return 61;
+  if (base === "fog") return 45;
+  if (base === "clearsky") return 0;
+  if (base === "fair") return 1;
+  if (base === "partlycloudy") return 2;
+  if (base === "cloudy") return 3;
+  return -1;
+};
+
+/** День ли сейчас: по суффиксу символа, а если его нет — по восходу и закату. */
+const isDay = (symbol: string, now: Date, sunrise?: string, sunset?: string): boolean => {
+  if (symbol.endsWith("_day")) return true;
+  if (symbol.endsWith("_night") || symbol.endsWith("_polartwilight")) return false;
+  if (!sunrise || !sunset) return true;
+  const t = now.getTime();
+  return t >= Date.parse(sunrise) && t < Date.parse(sunset);
+};
+
 export class DisplayService {
   /* Данные могут приходить с нескольких машин (ПК, ноутбук): держим
      последний пакет от каждой и сводим их, иначе экран прыгал бы между ними. */
@@ -119,27 +187,45 @@ export class DisplayService {
     return this.polzaState;
   }
 
-  /** Температура и рассвет/закат — open-meteo, без ключа. */
+  /**
+   * Температура, иконка и рассвет/закат — MET Norway (api.met.no), без ключа.
+   * open-meteo стоит на Hetzner, а его подсети из России недоступны.
+   * met.no требует представиться в User-Agent.
+   */
   private async loadWeather(): Promise<void> {
     try {
-      const url =
-        `https://api.open-meteo.com/v1/forecast?latitude=${env.weatherLat}` +
-        `&longitude=${env.weatherLon}&current=temperature_2m,weather_code,is_day&daily=sunrise,sunset` +
-        "&timezone=auto&forecast_days=1";
-      const response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
-      const json = (await response.json()) as {
-        current?: { temperature_2m?: number; weather_code?: number; is_day?: number };
-        daily?: { sunrise?: string[]; sunset?: string[] };
-      };
+      const now = new Date();
+      const { date, offset } = localDate(now);
+      const [forecast, sun] = await Promise.all([
+        metNo<MetForecast>(
+          `locationforecast/2.0/compact?lat=${env.weatherLat}&lon=${env.weatherLon}`
+        ),
+        metNo<MetSun>(
+          `sunrise/3.0/sun?lat=${env.weatherLat}&lon=${env.weatherLon}` +
+            `&date=${date}&offset=${encodeURIComponent(offset)}`
+        )
+      ]);
+
+      /* первая точка ряда — текущий час */
+      const point = forecast.properties?.timeseries?.[0]?.data;
+      const temp = point?.instant?.details?.air_temperature;
+      if (typeof temp !== "number") {
+        throw new Error("met.no: нет температуры в ответе");
+      }
+      const symbol =
+        point?.next_1_hours?.summary?.symbol_code ?? point?.next_6_hours?.summary?.symbol_code ?? "";
+      const sunrise = sun.properties?.sunrise?.time;
+      const sunset = sun.properties?.sunset?.time;
+
       this.weather = {
         at: Date.now(),
         data: {
-          temp_c: Number((json.current?.temperature_2m ?? 0).toFixed(1)),
-          /* WMO-код и день/ночь — дисплей выбирает по ним иконку */
-          weather_code: json.current?.weather_code ?? -1,
-          is_day: json.current?.is_day ?? 1,
-          sunrise: json.daily?.sunrise?.[0]?.slice(11, 16) ?? "--:--",
-          sunset: json.daily?.sunset?.[0]?.slice(11, 16) ?? "--:--"
+          temp_c: Number(temp.toFixed(1)),
+          /* дисплей выбирает иконку по WMO-коду и дню/ночи */
+          weather_code: wmoFromMetSymbol(symbol),
+          is_day: isDay(symbol, now, sunrise, sunset) ? 1 : 0,
+          sunrise: sunrise?.slice(11, 16) ?? "--:--",
+          sunset: sunset?.slice(11, 16) ?? "--:--"
         }
       };
     } catch (error) {
