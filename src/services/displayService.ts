@@ -11,6 +11,7 @@ import { PolzaService } from "./polzaService";
 const TASK_TYPES: IntegrationType[] = ["yandex_tracker_imap", "mail_gs_tracker_imap"];
 const TASK_KEY_REGEX = /\b[A-Z][A-Z0-9]+-\d+\b/;
 const WEATHER_CACHE_MS = 900_000;
+const WEATHER_RETRY_MS = 60_000;
 
 /* Каждое обновление — отдельное IMAP-соединение на ящик. Реже = меньше
    нагрузки на почтовики и меньше таймаутов на слабой сети. */
@@ -81,11 +82,45 @@ export class DisplayService {
   private refreshing = new Set<string>();
   private weather: { at: number; data: Record<string, unknown> } = { at: 0, data: {} };
 
-  /** Температура и рассвет/закат — open-meteo, без ключа. */
-  private async getWeather(): Promise<Record<string, unknown>> {
-    if (Date.now() - this.weather.at < WEATHER_CACHE_MS && Object.keys(this.weather.data).length) {
-      return this.weather.data;
+  private weatherTriedAt = 0;
+  private weatherLoading = false;
+  private polzaState: Awaited<ReturnType<PolzaService["getState"]>> = null;
+  private polzaLoading = false;
+
+  /* Внешние API не должны задерживать ответ дисплею: он ждёт 8 с, и когда
+     open-meteo не отвечал, экран уходил в OFFLINE. Отдаём то, что уже есть,
+     а обновляем в фоне; после ошибки пробуем снова через минуту. */
+  private getWeather(): Record<string, unknown> {
+    const now = Date.now();
+    const fresh = now - this.weather.at < WEATHER_CACHE_MS;
+    if (!fresh && !this.weatherLoading && now - this.weatherTriedAt >= WEATHER_RETRY_MS) {
+      this.weatherTriedAt = now;
+      this.weatherLoading = true;
+      void this.loadWeather().finally(() => {
+        this.weatherLoading = false;
+      });
     }
+    return this.weather.data;
+  }
+
+  /** polza.ai кэширует сам; здесь только не ждём его в запросе дисплея. */
+  private getPolza() {
+    if (!this.polzaLoading) {
+      this.polzaLoading = true;
+      void this.polza
+        .getState()
+        .then((state) => {
+          this.polzaState = state;
+        })
+        .finally(() => {
+          this.polzaLoading = false;
+        });
+    }
+    return this.polzaState;
+  }
+
+  /** Температура и рассвет/закат — open-meteo, без ключа. */
+  private async loadWeather(): Promise<void> {
     try {
       const url =
         `https://api.open-meteo.com/v1/forecast?latitude=${env.weatherLat}` +
@@ -110,7 +145,6 @@ export class DisplayService {
     } catch (error) {
       logger.warn({ err: error }, "weather request failed");
     }
-    return this.weather.data;
   }
 
   constructor(
@@ -283,12 +317,12 @@ export class DisplayService {
 
     const now = new Date();
     return {
-      ...(await this.getWeather()),
+      ...this.getWeather(),
       ...localClock(now),
       claude: {
         ...this.mergedUsage()
       },
-      polza: await this.polza.getState(),
+      polza: this.getPolza(),
       mailboxes: compact,
       unreadTotal: mailboxes.reduce((sum, box) => sum + box.unread, 0)
     };
